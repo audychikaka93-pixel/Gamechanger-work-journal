@@ -1,0 +1,711 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cleaning Company Journal</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; padding: 0; background-color: #f4f4f4; }
+        nav { background-color: #333; padding: 10px; }
+        nav button { margin: 5px; padding: 10px; background: #555; color: white; border: none; cursor: pointer; }
+        nav button.active { background: #007bff; }
+        section { display: none; padding: 20px; margin: 10px; background: white; border-radius: 5px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+        section.active { display: block; }
+        form { margin-bottom: 20px; }
+        input, select, textarea, button { margin: 5px; padding: 8px; }
+        table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #f2f2f2; }
+        .hidden { display: none; }
+        canvas { max-width: 100%; height: 300px; }
+        .notification { background: #fff3cd; padding: 10px; margin: 10px 0; border: 1px solid #ffeaa7; border-radius: 5px; }
+    </style>
+</head>
+<body>
+    <nav>
+        <button onclick="showSection('customers')">Customers</button>
+        <button onclick="showSection('workers')">Workers</button>
+        <button onclick="showSection('statistics')">Statistics</button>
+        <button onclick="showSection('problems')">Problems</button>
+        <button onclick="showSection('inventory')">Inventory</button>
+        <button onclick="showSection('calendar')">Calendar</button>
+    </nav>
+
+    <section id="customers-section" class="active">
+        <h2>Customers Management</h2>
+        <button onclick="showForm('addCustomer')">Add New Customer</button>
+        <button onclick="showForm('searchCustomer')">Search Customers</button>
+        <div id="customerForm" class="hidden">
+            <form id="customerFormEl">
+                <input type="hidden" id="customerId">
+                <label>Name: <input type="text" id="custName" required></label>
+                <label>Location: <input type="text" id="custLocation" required></label>
+                <label>Frequency (days): <input type="number" id="frequency" required min="1"></label>
+                <label>Number of Kitchens: <input type="number" id="numKitchens" min="1" onchange="generateKitchenInputs()"></label>
+                <div id="kitchensContainer"></div>
+                <button type="submit">Save Customer</button>
+                <button type="button" onclick="hideForm()">Cancel</button>
+            </form>
+        </div>
+        <div id="customerList"></div>
+        <div id="customerDetails" class="hidden"></div>
+        <div id="reminders" class="notification"></div>
+    </section>
+
+    <section id="workers-section">
+        <h2>Workers Management</h2>
+        <button onclick="showForm('addWorker')">Add New Worker</button>
+        <button onclick="showForm('searchWorker')">Search Workers</button>
+        <div id="workerForm" class="hidden">
+            <form id="workerFormEl">
+                <input type="hidden" id="workerId">
+                <label>Name: <input type="text" id="workerName" required></label>
+                <label>Surname: <input type="text" id="workerSurname" required></label>
+                <label>Contact (WhatsApp): <input type="tel" id="workerContact" required></label>
+                <label>Legal: <select id="workerLegal"><option value="true">Yes</option><option value="false">No</option></select></label>
+                <label>DOB: <input type="date" id="workerDob"></label>
+                <button type="submit">Save Worker</button>
+                <button type="button" onclick="hideForm()">Cancel</button>
+            </form>
+        </div>
+        <h3>Daily Attendance</h3>
+        <form id="attendanceForm">
+            <label>Date: <input type="date" id="attDate" required></label>
+            <label>Worker: <select id="attWorker" required onchange="loadCustomerForAttendance()"></select></label>
+            <label>Customer: <select id="attCustomer" required onchange="loadKitchensForAttendance()"></select></label>
+            <label>Kitchen: <select id="attKitchen" required onchange="loadKanalsForAttendance()"></select></label>
+            <label>Kanal: <select id="attKanal" required></select></label>
+            <label>Meters Cleaned: <input type="number" id="attMeters" min="0" required></label>
+            <label>Method: <select id="attMethod"><option value="spatula">Spatula</option><option value="tel bez">Tel Bez</option></select></label>
+            <button type="submit">Record Attendance</button>
+        </form>
+        <div id="workerList"></div>
+        <div id="workerDetails" class="hidden"></div>
+    </section>
+
+    <section id="statistics-section">
+        <h2>Statistics</h2>
+        <button onclick="showStats('customer')">Customer Stats</button>
+        <button onclick="showStats('worker')">Worker Stats</button>
+        <select id="statsPeriod"><option value="day">Day</option><option value="week">Week</option><option value="month">Month</option><option value="year">Year</option><option value="all">All</option></select>
+        <label>From: <input type="date" id="statsFrom"></label>
+        <label>To: <input type="date" id="statsTo"></label>
+        <div id="statsCharts"></div>
+    </section>
+
+    <section id="problems-section">
+        <h2>Problems</h2>
+        <form id="problemForm">
+            <label>Customer: <select id="probCustomer" required onchange="loadKitchensForProblem()"></select></label>
+            <label>Kitchen: <select id="probKitchen" required></select></label>
+            <label>Description: <textarea id="probDesc" required></textarea></label>
+            <label>Person Noticed: <input type="text" id="probPerson" required></label>
+            <button type="submit">Record Problem</button>
+        </form>
+        <table id="problemsTable">
+            <thead><tr><th>Customer</th><th>Kitchen</th><th>Desc</th><th>Date</th><th>Person</th><th>Solved?</th><th>Solved By</th><th>Time Taken</th><th>Actions</th></tr></thead>
+            <tbody></tbody>
+        </table>
+    </section>
+
+    <section id="inventory-section">
+        <h2>Inventory</h2>
+        <form id="itemForm">
+            <label>Item Name: <input type="text" id="itemName" required></label>
+            <label>Quantity: <input type="number" id="itemQty" min="0" required></label>
+            <button type="submit">Add/Update Item</button>
+        </form>
+        <h3>Take Out Item</h3>
+        <form id="takeOutForm">
+            <label>Item: <select id="takeOutItem" required></select></label>
+            <label>Quantity: <input type="number" id="takeOutQty" min="1" required></label>
+            <label>To Worker: <select id="takeOutWorker" required></select></label>
+            <button type="submit">Take Out</button>
+        </form>
+        <table id="inventoryTable">
+            <thead><tr><th>Item</th><th>Qty</th></tr></thead>
+            <tbody></tbody>
+        </table>
+        <h3>Worker Inventory</h3>
+        <select id="invWorker" onchange="showWorkerInventory()"></select>
+        <table id="workerInvTable" class="hidden">
+            <thead><tr><th>Date</th><th>Item</th><th>Qty</th></tr></thead>
+            <tbody></tbody>
+        </table>
+    </section>
+
+    <section id="calendar-section">
+        <h2>Calendar</h2>
+        <input type="date" id="calDate" onchange="showCalendarDay()">
+        <div id="calendarDay"></div>
+    </section>
+
+    <script>
+        // Data Storage using localStorage
+        function loadData(key) {
+            return JSON.parse(localStorage.getItem(key)) || [];
+        }
+        function saveData(key, data) {
+            localStorage.setItem(key, JSON.stringify(data));
+        }
+
+        // Customers
+        let customers = loadData('customers');
+        let cleaningHistory = loadData('cleaningHistory'); // Global for sync with workers
+
+        function showSection(section) {
+            document.querySelectorAll('section').forEach(s => s.classList.remove('active'));
+            document.getElementById(section + '-section').classList.add('active');
+            document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+            event.target.classList.add('active');
+            if (section === 'customers') renderCustomers();
+            if (section === 'workers') renderWorkers();
+            if (section === 'problems') renderProblems();
+            if (section === 'inventory') renderInventory();
+            if (section === 'calendar') showCalendarDay();
+            if (section === 'statistics') showStats('customer');
+        }
+
+        function showForm(type) {
+            if (type === 'addCustomer') {
+                document.getElementById('customerForm').classList.remove('hidden');
+                document.getElementById('customerFormEl').reset();
+                document.getElementById('customerId').value = '';
+                generateKitchenInputs();
+            } else if (type === 'searchCustomer') {
+                // Simple search, but render list instead
+                renderCustomers();
+            } // Similar for workers
+            // Add similar for workers, etc.
+        }
+
+        function hideForm() {
+            document.getElementById('customerForm').classList.add('hidden');
+            // Similar for others
+        }
+
+        function generateKitchenInputs() {
+            const num = parseInt(document.getElementById('numKitchens').value) || 0;
+            const container = document.getElementById('kitchensContainer');
+            container.innerHTML = '';
+            for (let i = 0; i < num; i++) {
+                const div = document.createElement('div');
+                div.innerHTML = `
+                    <h4>Kitchen ${i+1}</h4>
+                    <label>Name: <input type="text" name="kitchenName${i}" required></label>
+                    <label>Davulumbas: <input type="number" name="davulumbas${i}" min="0"></label>
+                    <label>Kanals (num): <input type="number" name="kanalsNum${i}" min="0" onchange="generateKanalInputs(${i})"></label>
+                    <div class="kanalContainer${i}"></div>
+                    <label>Motors (num): <input type="number" name="motorsNum${i}" min="0" onchange="generateMotorInputs(${i})"></label>
+                    <div class="motorContainer${i}"></div>
+                `;
+                container.appendChild(div);
+            }
+        }
+
+        function generateKanalInputs(kitchenIndex) {
+            const num = parseInt(document.querySelector(`input[name="kanalsNum${kitchenIndex}"]`).value) || 0;
+            const container = document.querySelector(`.kanalContainer${kitchenIndex}`);
+            container.innerHTML = '';
+            for (let j = 0; j < num; j++) {
+                const div = document.createElement('div');
+                div.innerHTML = `
+                    <label>Kanal ${j+1} Name: <input type="text" name="kanalName${kitchenIndex}_${j}"></label>
+                    <label>Length (m): <input type="number" name="kanalLength${kitchenIndex}_${j}" min="0" required></label>
+                `;
+                container.appendChild(div);
+            }
+        }
+
+        function generateMotorInputs(kitchenIndex) {
+            const num = parseInt(document.querySelector(`input[name="motorsNum${kitchenIndex}"]`).value) || 0;
+            const container = document.querySelector(`.motorContainer${kitchenIndex}`);
+            container.innerHTML = '';
+            for (let j = 0; j < num; j++) {
+                const div = document.createElement('div');
+                div.innerHTML = `
+                    <label>Motor ${j+1} Type: <select name="motorType${kitchenIndex}_${j}">
+                        <option value="cube">Cube</option>
+                        <option value="solyangoz">Solyangoz</option>
+                        <option value="kabinli">Kabinli</option>
+                    </select></label>
+                    <div class="filters${kitchenIndex}_${j} hidden">
+                        <label>Electrostatic: <input type="number" name="electro${kitchenIndex}_${j}" min="0"></label>
+                        <label>Carbon: <input type="number" name="carbon${kitchenIndex}_${j}" min="0"></label>
+                        <label>Kaset: <input type="number" name="kaset${kitchenIndex}_${j}" min="0"></label>
+                    </div>
+                `;
+                container.appendChild(div);
+                // Add event listener for type change
+                div.querySelector(`select[name="motorType${kitchenIndex}_${j}"]`).onchange = function() {
+                    const filters = div.querySelector(`.filters${kitchenIndex}_${j}`);
+                    filters.classList.toggle('hidden', this.value !== 'kabinli');
+                };
+            }
+        }
+
+        document.getElementById('customerFormEl').onsubmit = function(e) {
+            e.preventDefault();
+            const id = document.getElementById('customerId').value || Date.now().toString();
+            const numKitchens = parseInt(document.getElementById('numKitchens').value);
+            const kitchens = [];
+            for (let i = 0; i < numKitchens; i++) {
+                const dav = parseInt(document.querySelector(`input[name="davulumbas${i}"]`).value) || 0;
+                const kanalsNum = parseInt(document.querySelector(`input[name="kanalsNum${i}"]`).value) || 0;
+                const kanals = [];
+                for (let j = 0; j < kanalsNum; j++) {
+                    kanals.push({
+                        name: document.querySelector(`input[name="kanalName${i}_${j}"]`).value,
+                        length: parseFloat(document.querySelector(`input[name="kanalLength${i}_${j}"]`).value) || 0
+                    });
+                }
+                const motorsNum = parseInt(document.querySelector(`input[name="motorsNum${i}"]`).value) || 0;
+                const motors = [];
+                for (let j = 0; j < motorsNum; j++) {
+                    const type = document.querySelector(`select[name="motorType${i}_${j}"]`).value;
+                    const filters = type === 'kabinli' ? {
+                        electrostatic: parseInt(document.querySelector(`input[name="electro${i}_${j}"]`).value) || 0,
+                        carbon: parseInt(document.querySelector(`input[name="carbon${i}_${j}"]`).value) || 0,
+                        kaset: parseInt(document.querySelector(`input[name="kaset${i}_${j}"]`).value) || 0
+                    } : null;
+                    motors.push({ type, filters });
+                }
+                kitchens.push({
+                    name: document.querySelector(`input[name="kitchenName${i}"]`).value,
+                    davulumbas: dav,
+                    kanals,
+                    motors
+                });
+            }
+            const customer = {
+                id,
+                name: document.getElementById('custName').value,
+                location: document.getElementById('custLocation').value,
+                frequency: parseInt(document.getElementById('frequency').value),
+                kitchens,
+                nextClean: new Date(Date.now() + (frequency * 24 * 60 * 60 * 1000)).toISOString().split('T')[0] // Initial next
+            };
+            if (document.getElementById('customerId').value) {
+                const idx = customers.findIndex(c => c.id === id);
+                customers[idx] = customer;
+            } else {
+                customers.push(customer);
+            }
+            saveData('customers', customers);
+            hideForm();
+            renderCustomers();
+        };
+
+        function renderCustomers(sortBy = 'name') {
+            const list = document.getElementById('customerList');
+            list.innerHTML = '<h3>Customers</h3><input type="text" id="custSearch" placeholder="Search..." oninput="filterCustomers()"><select id="custSort" onchange="renderCustomers(this.value)"><option value="name">Alphabet</option><option value="due">Due Soon</option><option value="kitchens">Most Kitchens</option></select><table><thead><tr><th>Name</th><th>Location</th><th>Next Clean</th><th>Kitchens</th><th>Actions</th></tr></thead><tbody>' +
+                customers.sort((a, b) => {
+                    if (sortBy === 'name') return a.name.localeCompare(b.name);
+                    if (sortBy === 'due') return new Date(a.nextClean) - new Date(b.nextClean);
+                    return b.kitchens.length - a.kitchens.length;
+                }).map(c => `<tr><td onclick="showCustomerDetails('${c.id}')">${c.name}</td><td>${c.location}</td><td>${c.nextClean}</td><td>${c.kitchens.length}</td><td><button onclick="editCustomer('${c.id}')">Edit</button> <button onclick="deleteCustomer('${c.id}')">Delete</button></td></tr>`).join('') +
+                '</tbody></table>';
+            checkReminders();
+        }
+
+        function filterCustomers() {
+            const term = document.getElementById('custSearch').value.toLowerCase();
+            // Implement filter on table rows
+            const rows = document.querySelectorAll('#customerList tbody tr');
+            rows.forEach(row => row.style.display = row.textContent.toLowerCase().includes(term) ? '' : 'none');
+        }
+
+        function showCustomerDetails(id) {
+            const cust = customers.find(c => c.id === id);
+            if (!cust) return;
+            const details = document.getElementById('customerDetails');
+            details.innerHTML = `
+                <h3>${cust.name}</h3>
+                <p>Location: ${cust.location}</p>
+                <p>Kitchens: ${cust.kitchens.map(k => `<div><strong>${k.name}</strong>: ${k.davulumbas} Dav, ${k.kanals.length} Kan (${k.kanals.reduce((sum, ka) => sum + ka.length, 0)}m), ${k.motors.length} Mot</div>`).join('')}</p>
+                <h4>Cleaning History</h4>
+                <div>${cleaningHistory.filter(h => h.customerId === id).map(h => `<div>Date: ${h.date} - Kitchens cleaned: ${h.cleanedKitchens.map(kc => kc.kitchenName).join(', ')} - Workers: ${kc.cleanedKanals.map(kan => kan.worker).join(', ')} Problems: ${h.problems.length}</div>`).join('')}</div>
+                <p>Next Clean: ${cust.nextClean}</p>
+                <button onclick="recordCleaning('${id}')">Record Cleaning</button>
+                <button onclick="hideDetails()">Back</button>
+            `;
+            details.classList.remove('hidden');
+        }
+
+        function hideDetails() {
+            document.getElementById('customerDetails').classList.add('hidden');
+        }
+
+        function editCustomer(id) {
+            const cust = customers.find(c => c.id === id);
+            document.getElementById('customerId').value = id;
+            document.getElementById('custName').value = cust.name;
+            // Populate form similarly...
+            showForm('addCustomer');
+        }
+
+        function deleteCustomer(id) {
+            if (confirm('Delete?')) {
+                customers = customers.filter(c => c.id !== id);
+                saveData('customers', customers);
+                renderCustomers();
+            }
+        }
+
+        function recordCleaning(customerId) {
+            const date = new Date().toISOString().split('T')[0];
+            const cust = customers.find(c => c.id === customerId);
+            const form = document.createElement('form');
+            form.innerHTML = `
+                <h4>Record Cleaning for ${cust.name} - ${date}</h4>
+                ${cust.kitchens.map((k, i) => `<label><input type="checkbox" name="kitchen${i}"> ${k.name}</label><br>`).join('')}
+                <div id="cleanDetails"></div>
+                <label>Problems? <textarea id="newProblems"></textarea></label>
+                <button type="submit">Save</button>
+            `;
+            // On checkbox change, show details for selected kitchens
+            // For simplicity, assume implementation for marking cleaned items, workers per kanal
+            // Here, placeholder: assume user inputs in details
+            form.onsubmit = function(e) {
+                e.preventDefault();
+                // Parse selected, add to history, update nextClean = date + frequency
+                const historyEntry = { customerId, date, cleanedKitchens: [], problems: [] }; // Fill based on form
+                // Example: cleanedKitchens = [{kitchenName, cleanedDav: [], cleanedKanals: [{name, method, worker, meters}], ...}]
+                cleaningHistory.push(historyEntry);
+                saveData('cleaningHistory', cleaningHistory);
+                cust.nextClean = new Date(Date.now() + (cust.frequency * 24 * 60 * 60 * 1000)).toISOString().split('T')[0];
+                saveData('customers', customers);
+                showCustomerDetails(customerId);
+            };
+            document.getElementById('customerDetails').appendChild(form);
+            // Note: Full impl for per-kitchen details would add dynamic forms on checkbox
+        }
+
+        function checkReminders() {
+            const now = new Date();
+            const reminders = customers.filter(c => {
+                const due = new Date(c.nextClean);
+                return (due - now) / (1000*60*60*24) <= 14; // 2 weeks
+            }).map(c => `${c.name} due on ${c.nextClean}`);
+            document.getElementById('reminders').innerHTML = reminders.length ? `<strong>Reminders:</strong> ${reminders.join(', ')}` : '';
+        }
+
+        // Workers
+        let workers = loadData('workers');
+
+        document.getElementById('workerFormEl').onsubmit = function(e) {
+            e.preventDefault();
+            const id = document.getElementById('workerId').value || Date.now().toString();
+            const worker = {
+                id,
+                name: document.getElementById('workerName').value,
+                surname: document.getElementById('workerSurname').value,
+                contact: document.getElementById('workerContact').value,
+                legal: document.getElementById('workerLegal').value === 'true',
+                dob: document.getElementById('workerDob').value,
+                attendance: loadData('attendance').filter(a => a.workerId === id) // Sync
+            };
+            if (document.getElementById('workerId').value) {
+                const idx = workers.findIndex(w => w.id === id);
+                workers[idx] = worker;
+            } else {
+                workers.push(worker);
+            }
+            saveData('workers', workers);
+            hideForm();
+            renderWorkers();
+        };
+
+        function renderWorkers(sortBy = 'name') {
+            const list = document.getElementById('workerList');
+            list.innerHTML = '<h3>Workers</h3><input type="text" id="workerSearch" placeholder="Search..." oninput="filterWorkers()"><select id="workerSort" onchange="renderWorkers(this.value)"><option value="name">Alphabet</option><option value="meters">Most Meters</option><option value="kitchens">Most Kitchens</option><option value="legal">Legal</option><option value="attendance">Most Days</option></select><table><thead><tr><th>Name</th><th>Contact</th><th>Legal</th><th>Actions</th></tr></thead><tbody>' +
+                workers.sort((a, b) => {
+                    // Implement sorts, e.g. for meters: sum from attendance
+                    if (sortBy === 'name') return (a.name + ' ' + a.surname).localeCompare(b.name + ' ' + b.surname);
+                    // ... other sorts using computed values
+                    return 0;
+                }).map(w => `<tr><td onclick="showWorkerDetails('${w.id}')">${w.name} ${w.surname}</td><td><a href="https://wa.me/${w.contact.replace(/\D/g,'')}">Call</a></td><td>${w.legal ? 'Yes' : 'No'}</td><td><button onclick="editWorker('${w.id}')">Edit</button> <button onclick="deleteWorker('${w.id}')">Delete</button></td></tr>`).join('') +
+                '</tbody></table>';
+            populateSelect('attWorker', workers.map(w => ({value: w.id, text: w.name + ' ' + w.surname})));
+            populateSelect('takeOutWorker', workers.map(w => ({value: w.id, text: w.name + ' ' + w.surname})));
+            populateSelect('invWorker', workers.map(w => ({value: w.id, text: w.name + ' ' + w.surname})));
+        }
+
+        function populateSelect(id, options) {
+            const sel = document.getElementById(id);
+            sel.innerHTML = options.map(o => `<option value="${o.value}">${o.text}</option>`).join('');
+        }
+
+        function filterWorkers() {
+            // Similar to customers
+        }
+
+        function showWorkerDetails(id) {
+            const worker = workers.find(w => w.id === id);
+            if (!worker) return;
+            const att = loadData('attendance').filter(a => a.workerId === id);
+            document.getElementById('workerDetails').innerHTML = `
+                <h3>${worker.name} ${worker.surname}</h3>
+                <p>Contact: <a href="https://wa.me/${worker.contact.replace(/\D/g,'')}">Call</a></p>
+                <p>Legal: ${worker.legal ? 'Yes' : 'No'}</p>
+                <p>Attendance: ${att.length} days</p>
+                <div>${att.map(a => `<div>${a.date}: ${a.customer} - ${a.kitchen} - ${a.meters}m (${a.method})</div>`).join('')}</div>
+                <button onclick="hideDetails()">Back</button>
+            `;
+            document.getElementById('workerDetails').classList.remove('hidden');
+        }
+
+        function editWorker(id) {
+            const w = workers.find(w => w.id === id);
+            document.getElementById('workerId').value = id;
+            document.getElementById('workerName').value = w.name;
+            // Populate others
+            showForm('addWorker'); // Assume showForm for worker
+            document.getElementById('workerForm').classList.remove('hidden');
+        }
+
+        function deleteWorker(id) {
+            if (confirm('Delete?')) {
+                workers = workers.filter(w => w.id !== id);
+                saveData('workers', workers);
+                renderWorkers();
+            }
+        }
+
+        // Attendance Form
+        function loadCustomerForAttendance() {
+            const workerId = document.getElementById('attWorker').value;
+            populateSelect('attCustomer', customers.map(c => ({value: c.id, text: c.name})));
+        }
+
+        function loadKitchensForAttendance() {
+            const custId = document.getElementById('attCustomer').value;
+            const cust = customers.find(c => c.id === custId);
+            populateSelect('attKitchen', cust ? cust.kitchens.map((k, i) => ({value: i, text: k.name})) : []);
+        }
+
+        function loadKanalsForAttendance() {
+            const custId = document.getElementById('attCustomer').value;
+            const kitchenIdx = document.getElementById('attKitchen').value;
+            const cust = customers.find(c => c.id === custId);
+            const kitchen = cust.kitchens[kitchenIdx];
+            populateSelect('attKanal', kitchen ? kitchen.kanals.map((kan, j) => ({value: j, text: kan.name + ' (' + kan.length + 'm)' })) : []);
+        }
+
+        document.getElementById('attendanceForm').onsubmit = function(e) {
+            e.preventDefault();
+            const att = {
+                id: Date.now().toString(),
+                date: document.getElementById('attDate').value,
+                workerId: document.getElementById('attWorker').value,
+                customerId: document.getElementById('attCustomer').value,
+                kitchenIdx: document.getElementById('attKitchen').value,
+                kanalIdx: document.getElementById('attKanal').value,
+                meters: parseFloat(document.getElementById('attMeters').value),
+                method: document.getElementById('attMethod').value
+            };
+            let attendance = loadData('attendance');
+            attendance.push(att);
+            saveData('attendance', attendance);
+            // Sync to cleaningHistory: find or add to today's entry for customer
+            let histEntry = cleaningHistory.find(h => h.customerId === att.customerId && h.date === att.date);
+            if (!histEntry) {
+                histEntry = { customerId: att.customerId, date: att.date, cleanedKitchens: [] };
+                cleaningHistory.push(histEntry);
+            }
+            const kitchen = histEntry.cleanedKitchens.find(kc => kc.kitchenIdx === parseInt(att.kitchenIdx));
+            if (!kitchen) {
+                histEntry.cleanedKitchens.push({ kitchenIdx: parseInt(att.kitchenIdx), cleanedKanals: [] });
+            }
+            const workerName = workers.find(w => w.id === att.workerId).name + ' ' + workers.find(w => w.id === att.workerId).surname;
+            histEntry.cleanedKitchens.find(kc => kc.kitchenIdx === parseInt(att.kitchenIdx)).cleanedKanals.push({
+                kanalIdx: parseInt(att.kanalIdx), method: att.method, worker: workerName, meters: att.meters
+            });
+            saveData('cleaningHistory', cleaningHistory);
+            this.reset();
+            renderWorkers();
+        };
+
+        // Statistics
+        let statsCtx;
+        function showStats(type) {
+            const period = document.getElementById('statsPeriod').value;
+            const from = document.getElementById('statsFrom').value || '2025-01-01';
+            const to = document.getElementById('statsTo').value || new Date().toISOString().split('T')[0];
+            const chartsDiv = document.getElementById('statsCharts');
+            chartsDiv.innerHTML = '';
+            if (type === 'customer') {
+                // Example customer stats: total meters, cleaned, methods
+                const totalMeters = customers.reduce((sum, c) => sum + c.kitchens.reduce((s, k) => s + k.kanals.reduce((ss, ka) => ss + ka.length, 0), 0), 0);
+                const cleaned = cleaningHistory.filter(h => new Date(h.date) >= new Date(from) && new Date(h.date) <= new Date(to))
+                    .reduce((sum, h) => sum + h.cleanedKitchens.reduce((s, kc) => s + kc.cleanedKanals.reduce((ss, ck) => ss + ck.meters, 0), 0), 0);
+                const canvas = document.createElement('canvas');
+                chartsDiv.appendChild(canvas);
+                new Chart(canvas, { type: 'bar', data: { labels: ['Total', 'Cleaned'], datasets: [{ data: [totalMeters, cleaned] }] }, options: { scales: { y: { beginAtZero: true } } } });
+                // Add pie for methods, etc.
+            } else {
+                // Worker stats: meters per worker, etc.
+                const att = loadData('attendance').filter(a => new Date(a.date) >= new Date(from) && new Date(a.date) <= new Date(to));
+                const metersByWorker = workers.map(w => {
+                    const wAtt = att.filter(a => a.workerId === w.id);
+                    return { name: w.name, meters: wAtt.reduce((sum, a) => sum + a.meters, 0), days: wAtt.length };
+                });
+                const canvas = document.createElement('canvas');
+                chartsDiv.appendChild(canvas);
+                new Chart(canvas, { type: 'bar', data: { labels: metersByWorker.map(m => m.name), datasets: [{ label: 'Meters', data: metersByWorker.map(m => m.meters) }] }, options: { scales: { y: { beginAtZero: true } } } });
+                // Similar for days, etc.
+            }
+        }
+
+        // Problems
+        let problems = loadData('problems');
+
+        document.getElementById('problemForm').onsubmit = function(e) {
+            e.preventDefault();
+            const prob = {
+                id: Date.now().toString(),
+                customerId: document.getElementById('probCustomer').value,
+                kitchenIdx: document.getElementById('probKitchen').value,
+                desc: document.getElementById('probDesc').value,
+                date: new Date().toISOString().split('T')[0],
+                person: document.getElementById('probPerson').value,
+                solved: false
+            };
+            problems.push(prob);
+            saveData('problems', problems);
+            this.reset();
+            renderProblems();
+            // Add to current cleaning history if applicable
+        };
+
+        function loadKitchensForProblem() {
+            const custId = document.getElementById('probCustomer').value;
+            const cust = customers.find(c => c.id === custId);
+            populateSelect('probKitchen', cust ? cust.kitchens.map((k, i) => ({value: i, text: k.name})) : []);
+        }
+
+        function renderProblems() {
+            const tbody = document.querySelector('#problemsTable tbody');
+            tbody.innerHTML = problems.map(p => {
+                const cust = customers.find(c => c.id === p.customerId);
+                const kitchen = cust ? cust.kitchens[p.kitchenIdx] : {name: ''};
+                return `<tr>
+                    <td>${cust ? cust.name : ''}</td>
+                    <td>${kitchen.name}</td>
+                    <td>${p.desc}</td>
+                    <td>${p.date}</td>
+                    <td>${p.person}</td>
+                    <td>${p.solved ? 'Yes' : 'No'}</td>
+                    <td>${p.solved ? p.solvedBy : ''}</td>
+                    <td>${p.solved ? (new Date(p.solvedDate) - new Date(p.date)) / (1000*60*60*24) + ' days' : ''}</td>
+                    <td><button onclick="markSolved('${p.id}')">${p.solved ? 'Edit' : 'Solve'}</button></td>
+                </tr>`;
+            }).join('');
+            // Notifications: filter unsolved where customer due
+            const unsolvedDue = problems.filter(p => !p.solved && customers.find(c => c.id === p.customerId && (new Date(c.nextClean) - new Date()) / (1000*60*60*24) <= 14);
+            if (unsolvedDue.length) {
+                document.getElementById('problems-section').insertAdjacentHTML('afterbegin', `<div class="notification">Unsolved Problems Due: ${unsolvedDue.length}</div>`);
+            }
+        }
+
+        function markSolved(id) {
+            const p = problems.find(pr => pr.id === id);
+            if (!p.solved) {
+                p.solved = true;
+                p.solvedDate = new Date().toISOString().split('T')[0];
+                p.solvedBy = prompt('Solved by:');
+                p.timeTaken = (new Date(p.solvedDate) - new Date(p.date)) / (1000*60*60*24);
+            }
+            saveData('problems', problems);
+            renderProblems();
+        }
+
+        // Inventory
+        let inventory = loadData('inventory') || []; // [{name, qty}]
+
+        document.getElementById('itemForm').onsubmit = function(e) {
+            e.preventDefault();
+            const name = document.getElementById('itemName').value;
+            const qty = parseInt(document.getElementById('itemQty').value);
+            let item = inventory.find(i => i.name === name);
+            if (item) {
+                item.qty += qty;
+            } else {
+                inventory.push({name, qty});
+            }
+            saveData('inventory', inventory);
+            this.reset();
+            renderInventory();
+            populateTakeOutItems();
+        };
+
+        document.getElementById('takeOutForm').onsubmit = function(e) {
+            e.preventDefault();
+            const name = document.getElementById('takeOutItem').value;
+            const qty = parseInt(document.getElementById('takeOutQty').value);
+            const workerId = document.getElementById('takeOutWorker').value;
+            const item = inventory.find(i => i.name === name);
+            if (item && item.qty >= qty) {
+                item.qty -= qty;
+                let trans = loadData('transactions') || [];
+                trans.push({date: new Date().toISOString().split('T')[0], item: name, qty: -qty, workerId, type: 'out'});
+                saveData('transactions', trans);
+                saveData('inventory', inventory);
+                this.reset();
+                renderInventory();
+            } else {
+                alert('Not enough stock');
+            }
+        };
+
+        function populateTakeOutItems() {
+            populateSelect('takeOutItem', inventory.map(i => ({value: i.name, text: i.name + ' (' + i.qty + ')'})));
+        }
+
+        function renderInventory() {
+            const tbody = document.querySelector('#inventoryTable tbody');
+            tbody.innerHTML = inventory.map(i => `<tr><td>${i.name}</td><td>${i.qty}</td></tr>`).join('');
+            populateTakeOutItems();
+        }
+
+        function showWorkerInventory() {
+            const workerId = document.getElementById('invWorker').value;
+            const trans = loadData('transactions').filter(t => t.workerId === workerId && t.type === 'out');
+            const tbody = document.querySelector('#workerInvTable tbody');
+            tbody.innerHTML = trans.map(t => `<tr><td>${t.date}</td><td>${t.item}</td><td>${t.qty}</td></tr>`).join('');
+            document.getElementById('workerInvTable').classList.remove('hidden');
+        }
+
+        // Calendar
+        function showCalendarDay() {
+            const date = document.getElementById('calDate').value || new Date().toISOString().split('T')[0];
+            const dayWork = cleaningHistory.filter(h => h.date === date).map(h => {
+                const cust = customers.find(c => c.id === h.customerId);
+                return `${cust.name}: Kitchens ${h.cleanedKitchens.map(kc => cust.kitchens[kc.kitchenIdx].name).join(', ')} by ${h.cleanedKitchens.reduce((ws, kc) => ws.concat(kc.cleanedKanals.map(ck => ck.worker)), []).join(', ')}`;
+            });
+            document.getElementById('calendarDay').innerHTML = `<h3>${date}</h3><ul>${dayWork.map(w => `<li>${w}</li>`).join('')}</ul>`;
+        }
+
+        // Init
+        document.getElementById('calDate').value = new Date().toISOString().split('T')[0];
+        showCalendarDay();
+        populateSelect('probCustomer', customers.map(c => ({value: c.id, text: c.name})));
+        renderInventory();
+        // For workers form, add showForm logic similar to customers
+        function showForm(type) {
+            if (type === 'addWorker') {
+                document.getElementById('workerForm').classList.remove('hidden');
+                document.getElementById('workerFormEl').reset();
+                document.getElementById('workerId').value = '';
+            } else if (type === 'searchWorker') {
+                renderWorkers();
+            }
+            hideForm = function() { document.getElementById('workerForm').classList.add('hidden'); };
+        }
+        renderWorkers();
+        renderProblems();
+        renderCustomers();
+    </script>
+</body>
+</html>
